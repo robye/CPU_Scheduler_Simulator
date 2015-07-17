@@ -1,13 +1,7 @@
-/*
-# Family Name: Ye
-# Given Name:	Hongbing
-# Student Number: 212678405
-# CSE Login: hongbing
-*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "sch-helpers.h"
-
 
 int i;
 process processes[MAX_PROCESSES];  		// a large structure array to hold all processes read from data file
