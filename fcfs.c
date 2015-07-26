@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include "sch-helpers.h"
 
-int i;
 process processes[MAX_PROCESSES];  		// a large structure array to hold all processes read from data file
 int numberOfProcesses;              	// total number of processes
 int clockTime;												// the system clock time to determine the entry for any burst
@@ -11,7 +10,6 @@ int processIndex;											// index for traversal of all processes
 process *tempArray[MAX_PROCESSES];		// tempArray to handle the case where some actions happen at the same time spot
 int tempArrayIndex;
 process *cpus[NUMBER_OF_PROCESSORS];
-
 /* ready-queue and device-queue */
 process_queue ready_queue;
 process_queue device_queue;
@@ -27,12 +25,24 @@ void nextUnitProcess(void) {
 		processIndex++;
 	}
 }
+
+
+/* simulates the CPU scheduler, fetching and dequeuing the next scheduled
+   process from the ready queue.  it then returns a pointer to this process,
+   or NULL if no suitable next process exists. */
+process *nextScheduledProcess(void) {
+    if (ready_queue.size == 0) return NULL;
+    process *result = ready_queue.front->data;
+    dequeueProcess(&ready_queue);
+    return result;
+}
+
 /**	based on nextUnitProcess, we have the process(es) that are ready to be added to ready_queue
 *	and for processes in the ready_queue, we find any available cpus to allocate the processes.
 * 	Note: we need to sort the array by process id if they have the same scheduling criterion.
 */
 void readyQtoCPU(void) {
-
+	int i;
 	/* reorder the temp array based on their pid, only happen when two arrival time is the same */
 	qsort(tempArray, tempArrayIndex, sizeof(process *), compareByPid);
 	/* enqueue the elements in the temp to ready_queue */
@@ -47,17 +57,7 @@ void readyQtoCPU(void) {
 	for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
 		if(cpus[i] == NULL) {
 			/* allocate process from ready_queue to cpu(if applicable) */
-			if(ready_queue.size == 0) {
-				cpus[i] = NULL;
-			}
-			else {
-				cpus[i] = ready_queue.front->data;
-				/* if the process is allocated to cpu for first cpu burst, that's the startTime for this process */
-				if(cpus[i]->currentBurst == 0) {
-					cpus[i]->startTime = clockTime;
-				}
-				dequeueProcess(&ready_queue);
-			}
+			cpus[i] = nextScheduledProcess();
 		}
 	}
 }
@@ -69,13 +69,11 @@ void readyQtoCPU(void) {
 *	set the current clockTime to the process end time. Last, free the corresponding CPU.
 */
 void cpuToio(void) {
-
+	int i;
 	for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
 		// Note that initiallly there is no cpu running on any processes.
-
 		if(cpus[i] != NULL) {
 			/* check if current burst is finished */
-
 			if(isBurstFinished(cpus[i])) {
 				(cpus[i]->currentBurst)++;
 				/* do another check for endtime or just a enqueue step */
@@ -88,7 +86,6 @@ void cpuToio(void) {
 				/* free current working cpu */
 				cpus[i] = NULL;
 			}
-		// if setp != length, that means the running cpu has not finished cpu burst, wait next clock.
 		}
 	}
 }
@@ -101,7 +98,7 @@ void cpuToio(void) {
 *	we need to sort the tempArray again and add it back to ready_queue
 */
 void ioToReadyQ(void) {
-
+	int i;
 	int ioSize = device_queue.size;
 	for(i = 0; i < ioSize; i++) {
 		/* the out element of the queue */
@@ -110,12 +107,14 @@ void ioToReadyQ(void) {
 		/** if i/o finish add it to tempArray, otherwise enqueue back to device_queue again and
 		*   try next element in device queue
 		*/
+
 		if(isBurstFinished(dequeuedProcess)) {
 			/* move forward for burst */
 			(dequeuedProcess->currentBurst)++;
 			/* use temp array to temporarily store the dequeued processes */
 			tempArray[tempArrayIndex] = dequeuedProcess;
 			tempArrayIndex++;
+
 		}
 		/* enqueue it back to device_queue and try next one */
 		else {
@@ -142,7 +141,7 @@ int isBurstFinished(process *p) {
 *
 */
 void nextUnitTime(void) {
-
+	int i;
 	int ioSize = device_queue.size;
 	/* increase step for processes in device queue */
 	for(i = 0; i < ioSize; i++) {
@@ -170,6 +169,7 @@ void nextUnitTime(void) {
 
 /* return 0 if no process is running */
 int isAllIdle() {
+	int i;
 	int runningCPU = 0;
 	for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
 		if(cpus[i] != NULL) {
@@ -184,7 +184,8 @@ int main() {
 
 	/* initialzie some global and local variables */
 	int status = 0;
-	int lastPid, j, totalUtilized = 0, totalWaiting = 0, totalTurnAround = 0;
+	int lastPid, j;
+	int totalUtilized = 0, totalWaiting = 0, totalTurnAround = 0;
 	double avgWaiting, avgTurnAround, avgUtil;
 	clockTime = 0;
 	processIndex = 0;
@@ -225,8 +226,9 @@ int main() {
 
 		nextUnitProcess();		// at each time spot, add matched process to be run to tempArray
 		cpuToio(); 						// initially not executed since no cpus is running.
-		readyQtoCPU();				// equeue all processes from sorted tempArray into ready_queue and allocate cpus for them.
 		ioToReadyQ();					// to check io queue if some processes should go back to ready_queue.
+		readyQtoCPU();				// equeue all processes from sorted tempArray into ready_queue and allocate cpus for them.
+
 
 		/* now we have to make progress, which is going to next unit of time */
 		nextUnitTime();
@@ -244,8 +246,8 @@ int main() {
 		// 	if(i == 16)
 		// 	printf("clockTime %d Process id #%d with total bursts: %d, now it's been %d bursts, current burst step: %d, total length to go %d\n", clockTime, processes[i].pid,processes[i].numberOfBursts, processes[i].currentBurst, processes[i].bursts[processes[i].currentBurst].step,processes[i].bursts[processes[i].currentBurst].length);
 		// }
-		// printf("process status: %d ready_q status %d device_queue status: %d\n", isAllIdle(), numberOfProcesses- processIndex, device_queue.size);
-		if((isAllIdle() == 0) && ((numberOfProcesses - processIndex) == 0) && (device_queue.size == 0) && (tempArrayIndex == 0)) {
+		// printf("process status: %d ready_q status %d device_queue status: %d clockTime: %d\n", isAllIdle(), numberOfProcesses- processIndex, device_queue.size, clockTime);
+		if((isAllIdle() == 0) && ((numberOfProcesses - processIndex) == 0) && (device_queue.size == 0) ) {
 			// for(i = 0; i < numberOfProcesses; i++) {
 			// 	printf("Process id #%d with total bursts: %d, now it's been %d bursts, current burst step: %d, total length to go %d\n", processes[i].pid,processes[i].numberOfBursts, processes[i].currentBurst, processes[i].bursts[processes[i].currentBurst].step,processes[i].bursts[processes[i].currentBurst].length);
 			// }
@@ -256,9 +258,9 @@ int main() {
 	}
 	/* calculation and display result */
 	for(j = 0; j < numberOfProcesses; j++) {
-		// printf("Process #%d with arrivalTime: %d start time: %d, end time: %d\n", processes[j].pid,processes[j].arrivalTime, processes[j].startTime, processes[j].endTime);
+
 		totalWaiting += processes[j].waitingTime;
-		totalTurnAround += (processes[j].endTime - processes[j].startTime);
+		totalTurnAround += (processes[j].endTime - processes[j].arrivalTime);
 		if(processes[j].endTime == clockTime) {
 
 			lastPid = processes[j].pid;

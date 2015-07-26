@@ -347,9 +347,10 @@ int compareByArrival(const void *aa, const void *bb) {
 }
 /* comparator for process structs that orders them by pid if current clock time is the same */
 int compareByPid(const void *aa, const void *bb) {
-    process *a = (process*) aa;
-    process *b = (process*) bb;
+    process *a = *((process**) aa);
+    process *b = *((process**) bb);
     if (a->pid < b->pid) return -1;
     if (a->pid > b->pid) return 1;
+    assert(0);
     return 0;
 }
