@@ -27,16 +27,6 @@ void nextUnitProcess(void) {
 }
 
 
-/* simulates the CPU scheduler, fetching and dequeuing the next scheduled
-   process from the ready queue.  it then returns a pointer to this process,
-   or NULL if no suitable next process exists. */
-process *nextScheduledProcess(void) {
-    if (ready_queue.size == 0) return NULL;
-    process *result = ready_queue.front->data;
-    dequeueProcess(&ready_queue);
-    return result;
-}
-
 /**	based on nextUnitProcess, we have the process(es) that are ready to be added to ready_queue
 *	and for processes in the ready_queue, we find any available cpus to allocate the processes.
 * 	Note: we need to sort the array by process id if they have the same scheduling criterion.
@@ -57,7 +47,13 @@ void readyQtoCPU(void) {
 	for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
 		if(cpus[i] == NULL) {
 			/* allocate process from ready_queue to cpu(if applicable) */
-			cpus[i] = nextScheduledProcess();
+			if(ready_queue.size == 0) {
+				cpus[i] = NULL;
+			}
+			else {
+				cpus[i] = ready_queue.front->data;
+				dequeueProcess(&ready_queue);
+			}
 		}
 	}
 }
