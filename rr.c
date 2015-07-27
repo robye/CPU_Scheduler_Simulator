@@ -7,7 +7,7 @@ process processes[MAX_PROCESSES];  		// a large structure array to hold all proc
 int numberOfProcesses;              	// total number of processes
 int clockTime;												// the system clock time to determine the entry for any burst
 int processIndex;											// index for traversal of all processes
-int timeQuantum;                      // timeQuantum initialized in command-line argument
+int timeSlice;                        // timeSlice initialized in command-line argument
 int totalCW;
 process *tempArray[MAX_PROCESSES];		// tempArray to handle the case where some actions happen at the same time spot
 int tempArrayIndex;
@@ -20,15 +20,14 @@ process_queue device_queue;
 *	will be used for scheduling next running process.
 */
 void nextUnitProcess(void) {
-	// check current process index and match the time spot, and initialize the timeQuantum for newly added process
+	// check current process index and match the time spot, and initialize the timeSlice for newly added process
 	while(processIndex < numberOfProcesses && processes[processIndex].arrivalTime <= clockTime) {
 		tempArray[tempArrayIndex] = &processes[processIndex];
-    tempArray[tempArrayIndex]->quantumRemaining = timeQuantum;
+    tempArray[tempArrayIndex]->quantumRemaining = timeSlice;
 		tempArrayIndex++;
 		processIndex++;
 	}
 }
-
 /**	based on nextUnitProcess, we have the process(es) that are ready to be added to ready_queue
 *	and for processes in the ready_queue, we find any available cpus to allocate the processes.
 * 	Note: we need to sort the array by process id if they have the same scheduling criterion.
@@ -68,7 +67,7 @@ void readyQtoCPU(void) {
 */
 void cpuOut(void) {
 	int i;
-  int tempIndex;
+  int tempIndex = 0;
   process *temp[NUMBER_OF_PROCESSORS];
 	for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
 		// Note that initiallly there is no cpu running on any processes.
@@ -92,14 +91,22 @@ void cpuOut(void) {
         *  that's where context switches happens, at this point, process(es) should go to ready_queue
         *  instead of going to i/o queue, and wait to be assigned next available cpu.
         */
+        temp[tempIndex] = cpus[i];
+        temp[tempIndex]->quantumRemaining = timeSlice;
+        tempIndex++;
         totalCW++;
-
+        cpus[i] = NULL;
+        }
       }
 		}
+    /* like tempArray in i/o to ready_queue function call, there might be several processes that need
+    *  to be added to the tail of ready_queue, so we need to sort them by the process id.
+    */
+    qsort(temp, tempIndex, sizeof(process *), compareByPid);
+    for(i=0; i < tempIndex; i++) {
+      enqueueProcess(&ready_queue, temp[i]);
 	}
 }
-
-
 /**	from i/o to ready_queue.
 *	Since we have device queue that hold numbers of processes with i/o bursting.
 *	Now we want to detect any finished i/o burst process and enqueue it to tempArray again,
@@ -120,8 +127,8 @@ void ioToReadyQ(void) {
 		if(isBurstFinished(dequeuedProcess)) {
 			/* move forward for burst */
 			(dequeuedProcess->currentBurst)++;
-      /* since the i/o burst is finised, hence, we need to reset the timeQuantum for next cpu burst */
-      dequeuedProcess->quantumRemaining = timeQuantum;
+      /* since the i/o burst is finised, hence, we need to reset the timeSlice for next cpu burst */
+      dequeuedProcess->quantumRemaining = timeSlice;
 			/* use temp array to temporarily store the dequeued processes */
 			tempArray[tempArrayIndex] = dequeuedProcess;
 			tempArrayIndex++;
@@ -173,7 +180,7 @@ void nextUnitTime(void) {
 	for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
 		if(cpus[i] != NULL) {
 			((cpus[i]->bursts[cpus[i]->currentBurst]).step)++;
-      /* decrese the cpu running time by 1 */
+      /* decrease the cpu running time by 1 */
       cpus[i]->quantumRemaining--;
 		}
 	}
@@ -201,7 +208,8 @@ int main(int argc, char **argv) {
 	double avgWaiting, avgTurnAround, avgUtil;
 	clockTime = 0;
 	processIndex = 0;
-  timeQuantum = atoi(argv[1]);
+  tempArrayIndex = 0;
+  timeSlice = atoi(argv[1]);
 
 	/* initialize the CPUs, set all cpus to idle status and no process is assigned to any one of them */
 	for(j = 0; j < NUMBER_OF_PROCESSORS; j++) {
@@ -234,9 +242,9 @@ int main(int argc, char **argv) {
 		*	second do all the checks for all queue and process to determin where are they going to
 		*	and what actions they have to do.
 		*/
-
 		nextUnitProcess();		// at each time spot, add matched process to be run to tempArray
-		cpuToio(); 						// initially not executed since no cpus is running.
+
+		cpuOut(); 						// initially not executed since no cpus is running.
 		ioToReadyQ();					// to check io queue if some processes should go back to ready_queue.
 		readyQtoCPU();				// equeue all processes from sorted tempArray into ready_queue and allocate cpus for them.
 
@@ -254,14 +262,11 @@ int main(int argc, char **argv) {
 		*	3: the waiting queue is empty
 		*/
 		if((isAllIdle() == 0) && ((numberOfProcesses - processIndex) == 0) && (device_queue.size == 0) ) {
-			// for(i = 0; i < numberOfProcesses; i++) {
-			// 	printf("Process id #%d with total bursts: %d, now it's been %d bursts, current burst step: %d, total length to go %d\n", processes[i].pid,processes[i].numberOfBursts, processes[i].currentBurst, processes[i].bursts[processes[i].currentBurst].step,processes[i].bursts[processes[i].currentBurst].length);
-			// }
 			break;
 		}
 		/* add one more unit time to next step */
 		clockTime++;
-	}
+  }
 	/* calculation and display result */
 	for(j = 0; j < numberOfProcesses; j++) {
 
@@ -276,10 +281,11 @@ int main(int argc, char **argv) {
 	avgTurnAround = totalTurnAround / (double)numberOfProcesses;
 	avgUtil = totalUtilized / (double)clockTime;
 
-	printf("The average waiting time is: %.1f\n"
-					"The average turnaround time is: %.1f\n"
-					"The CPUs finished at: %d\nThe average cpu utilization is: %.2f%%\n"
-					"Total context switches: %d\n"
-					"The last process is: %d\n", avgWaiting, avgTurnAround, clockTime, avgUtil*100, 0, lastPid);
+	printf("The average waiting time is:      %.2f\n"
+					"The average turnaround time is:   %.2f\n"
+					"The CPUs finished at:             %d\n"
+          "The average cpu utilization is:   %.2f%%\n"
+					"Total context switches:           %d\n"
+					"The last process is:              %d\n", avgWaiting, avgTurnAround, clockTime, avgUtil*100, totalCW, lastPid);
 
 }
