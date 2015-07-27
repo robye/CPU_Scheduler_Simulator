@@ -1,0 +1,23 @@
+Time slice 10:
+The average waiting time is:      19.63
+The average turnaround time is:   40489.03
+The CPUs finished at:             68551
+The average cpu utilization is:   78.93%
+Total context switches:           9876
+The last process is:              28
+
+Time slice 4:
+The average waiting time is:      22.83
+The average turnaround time is:   40492.23
+The CPUs finished at:             68551
+The average cpu utilization is:   78.93%
+Total context switches:           3146
+The last process is:              28
+
+Time slice 10000:
+The average waiting time is:      23.20
+The average turnaround time is:   40492.60
+The CPUs finished at:             68571
+The average cpu utilization is:   78.91%
+Total context switches:           0
+The last process is:              28
