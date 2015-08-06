@@ -70,34 +70,6 @@ void readyQtoCPU(void) {
 				dequeueProcess(&ready_queue[2]);
 			}
 		}
-		// preemptive action need to be taken when priority collision happen
-		// else {
-		// 	if(ready_queue[0].size != 0 ) {
-		// 		if(cpus[i]->currentQueue == 1) {
-		// 			cpus[i]->currentQueue = 1;
-		// 			enqueueProcessHead(&ready_queue[1], cpus[i]);
-		// 			cpus[i] = ready_queue[0].front->data;
-		// 			dequeueProcess(&ready_queue[0]);
-		// 			totalCW++;
-		// 		}
-		// 		if(cpus[i]->currentQueue == 2) {
-		// 			cpus[i]->currentQueue = 2;
-		// 			enqueueProcessHead(&ready_queue[2], cpus[i]);
-		// 			cpus[i] = ready_queue[0].front->data;
-		// 			dequeueProcess(&ready_queue[0]);
-		// 			totalCW++;
-		// 		}
-		// 	}
-		//  else if(ready_queue[1].size != 0) {
-		// 	 if(cpus[i]->currentQueue == 2) {
-		// 		 cpus[i]->currentQueue = 2;
-		// 		enqueueProcessHead(&ready_queue[2], cpus[i]);
-		// 		cpus[i] = ready_queue[1].front->data;
-		// 		dequeueProcess(&ready_queue[1]);
-		// 		totalCW++;
-		// 		}
-		// 	}
-		// }
 	}
 }
 
@@ -130,58 +102,32 @@ void cpuOut(void) {
       // If the current cpu burst is not finised but the time quantum is running out.
 
 			else if(cpus[i]->quantumRemaining == 0) {
-
 				temp[tempIndex] = cpus[i];
 				tempIndex++;
 				totalCW++;
-					// // if step = timeQuantum1, reset quantumRemaining to timeQuantum2 and push it to ready_queue[1]
-					// 	if(cpus[i]->bursts[cpus[i]->currentBurst].step == timeQuantum1){
-					// 	// ?? if 4 processes are the same condition do we need temp sorted ? for now we assume it is sorted
-					// 	temp[tempIndex] = cpus[i];
-					// 	temp[tempIndex++]->quantumRemaining = timeQuantum2;
-					// 	totalCW++;
-					// 	// free current cpu
-					// 	cpus[i] = NULL;
-					// }
-					// else if(cpus[i]->bursts[cpus[i]->currentBurst].step == (timeQuantum2)){
-					// 	// FCFS
-					// 	temp[tempIndex++] = cpus[i];
-					// 	totalCW++;
-					// 	// free current cpu
-					// 	cpus[i] = NULL;
-					// }
-					cpus[i] = NULL;
-				}
-				else if(cpus[i]->quantumRemaining != 0) {
+				cpus[i] = NULL;
+			}
+			else if(cpus[i]->quantumRemaining != 0) {
 					if(ready_queue[0].size != 0) {
-						if(cpus[i]->currentQueue == 1) {
-							cpus[i]->currentQueue = 1;
-							enqueueProcessHead(&ready_queue[1], cpus[i]);
-							cpus[i] = ready_queue[0].front->data;
-							dequeueProcess(&ready_queue[0]);
-							totalCW++;
-						}
-						else if(cpus[i]->currentQueue == 2) {
-							cpus[i]->currentQueue = 2;
-							enqueueProcessHead(&ready_queue[2], cpus[i]);
+						if(cpus[i]->currentQueue == 1 || cpus[i]->currentQueue == 2) {
+							enqueueProcessHead(&ready_queue[cpus[i]->currentQueue], cpus[i]);
 							cpus[i] = ready_queue[0].front->data;
 							dequeueProcess(&ready_queue[0]);
 							totalCW++;
 						}
 					}
 					else if(ready_queue[1].size != 0 && cpus[i]->currentQueue == 2) {
-						cpus[i]->currentQueue = 2;
 						enqueueProcessHead(&ready_queue[2], cpus[i]);
 						cpus[i] = ready_queue[1].front->data;
 						dequeueProcess(&ready_queue[1]);
 						totalCW++;
 					}
-				}
-    /* like tempArray in i/o to ready_queue function call, there might be several processes that need
-    *  to be added to the tail of ready_queue, so we need to sort them by the process id.
-    */
+			}
 		}
 	}
+	/* like tempArray in i/o to ready_queue function call, there might be several processes that need
+	*  to be added to the tail of ready_queue, so we need to sort them by the process id.
+	*/
 	qsort(temp, tempIndex, sizeof(process *), compareByPid);
 	for(i = 0; i < tempIndex; i++) {
 		if(temp[i]->bursts[temp[i]->currentBurst].step == timeQuantum1) {
@@ -359,14 +305,6 @@ int main(int argc, char **argv) {
 		}
 		/* add one more unit time to next step */
 		clockTime++;
-		// for(i = 0; i < NUMBER_OF_PROCESSORS; i++) {
-		// 	if(cpus[i] != NULL) {
-		// 		printf("CPU#%d currently running on process with PID#%d, the running process with quantumRemaining: %d\n", i, cpus[i]->pid, cpus[i]->quantumRemaining);
-		// 	}
-		// 	else {
-		// 		printf("\n");
-		// 	}
-		// }
 	}
 	/* calculation and display result */
 	for(j = 0; j < numberOfProcesses; j++) {
@@ -385,7 +323,7 @@ int main(int argc, char **argv) {
 	printf("The average waiting time is:      %.2f\n"
 					"The average turnaround time is:   %.2f\n"
 					"The CPUs finished at:             %d\n"
-          "The average cpu utilization is:   %.2f%%\n"
+          "The average cpu utilization is:   %.1f%%\n"
 					"Total context switches:           %d\n"
 					"The last process is:              %d\n", avgWaiting, avgTurnAround, clockTime, avgUtil*100, totalCW, lastPid);
 
